@@ -1,8 +1,8 @@
-# pip install python-doc
-
 import os
 from pypdf import PdfReader
 from docx import Document
+
+from document_processing.youtube_loader import load_youtube_video
 
 
 def load_txt(path):
@@ -11,7 +11,9 @@ def load_txt(path):
 
 
 def load_pdf(path):
+
     reader = PdfReader(path)
+
     text = ""
 
     for page in reader.pages:
@@ -21,9 +23,11 @@ def load_pdf(path):
 
 
 def load_docx(path):
+
     doc = Document(path)
 
     text = []
+
     for para in doc.paragraphs:
         text.append(para.text)
 
@@ -59,5 +63,10 @@ def load_documents(folder_path):
 
         except Exception as e:
             print(f"Skipping {filename}: {e}")
-    print("Loaded {} documents".format(len(documents)))
+
     return documents
+
+
+def load_youtube(url):
+
+    return load_youtube_video(url)
