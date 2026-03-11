@@ -17,8 +17,22 @@ def load_youtube_video(url):
 
     video_id = extract_video_id(url)
 
-    api = YouTubeTranscriptApi()
-    transcript = api.fetch(video_id)
+    if not video_id:
+        print("\nInvalid YouTube link. Please try again with a valid link or press enter to skip.\n")
+        return []
+
+    try:
+
+        api = YouTubeTranscriptApi()
+        transcript = api.fetch(video_id)
+
+    except Exception as e:
+
+        print("\nCould not retrieve transcript for this video.")
+        print("Reason:", e)
+        print("Try another link or press enter to skip.\n")
+
+        return []
 
     chunks = []
 

@@ -11,34 +11,29 @@ class VectorStore:
         self.texts = []
         self.doc_count = 0
 
-    def embed(self, text):
-
-        response = client.embeddings.create(
-            model=EMBED_MODEL,
-            input=text
-        )
-        # print("Text embedded")
-        return response.data[0].embedding
-
-    def build_index(self, chunks, batch_size=50):
+    def embed_batch(self, texts, batch_size=128):
 
         embeddings = []
 
-        for i in range(0, len(chunks), batch_size):
+        for i in range(0, len(texts), batch_size):
 
-            batch = chunks[i:i+batch_size]
-
-            texts = [c["text"] for c in batch]
+            batch = texts[i:i + batch_size]
 
             response = client.embeddings.create(
                 model=EMBED_MODEL,
-                input=texts
+                input=batch
             )
 
-            for emb, chunk in zip(response.data, batch):
+            for item in response.data:
+                embeddings.append(item.embedding)
 
-                embeddings.append(emb.embedding)
-                self.texts.append(chunk)
+        return embeddings
+
+    def build_index(self, chunks):
+
+        texts = [c["text"] for c in chunks]
+
+        embeddings = self.embed_batch(texts)
 
         embeddings = np.array(embeddings).astype("float32")
 
@@ -47,10 +42,10 @@ class VectorStore:
         self.index = faiss.IndexFlatL2(dim)
         self.index.add(embeddings)
 
+        self.texts = chunks
         self.doc_count = len(chunks)
-        print("Index built with {} documents".format(self.doc_count))
 
-    def search(self, query_embedding, k=5):
+    def search(self, query_embedding, k=8):
 
         D, I = self.index.search(
             np.array([query_embedding]).astype("float32"),
@@ -61,5 +56,5 @@ class VectorStore:
 
         for idx in I[0]:
             results.append(self.texts[idx])
-        print("Vector Search completed")
+
         return results
