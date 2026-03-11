@@ -20,7 +20,7 @@ Guidelines:
 2. If the question refers to "this video", "the video", "this document", or "the material", assume it refers to the provided context.
 3. If multiple context chunks mention related ideas, combine them to produce a clear answer.
 4. If the context contains timestamps (e.g. [32.5s]), they refer to moments in a video transcript.
-5. If the context does not contain enough information, say so clearly before answering with general knowledge.
+5. If the context does not contain enough information, say "The provided context does not contain enough information to answer this question" before answering with general knowledge.
 
 Context:
 {context_text}

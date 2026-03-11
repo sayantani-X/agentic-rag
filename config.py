@@ -8,5 +8,6 @@ client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=os.getenv("OPEN
 
 EMBED_MODEL = "openai/text-embedding-3-small"
 LLM_MODEL = "meta-llama/llama-3.1-8b-instruct"
+VISION_MODEL = "openai/gpt-4o-mini"
 
-TOP_K = 5
+TOP_K = 8
