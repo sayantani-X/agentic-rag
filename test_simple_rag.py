@@ -1,12 +1,30 @@
 from pipeline.rag_pipeline import RAGPipeline
 from tools.image_qa import ask_image_question
+from tools.image_generation import generate_image
 
 
 print("Choose mode:")
-print("1. Ask questions from documents (RAG)")
+print("1. Ask questions from context (RAG)")
 print("2. Ask questions about an image (VQA)")
+print("3. Generate an image")
 
-mode = input("Enter choice (1/2): ")
+mode = input("Enter choice (1/2/3): ")
+
+
+# -------------------------
+# IMAGE GENERATION
+# -------------------------
+
+if mode == "3":
+
+    prompt = input("Enter image prompt: ")
+
+    path = generate_image(prompt)
+
+    print("\nImage generated and saved at:")
+    print(path)
+
+    exit()
 
 
 # -------------------------
@@ -17,11 +35,16 @@ if mode == "2":
 
     image_path = input("Enter image path: ")
 
-    question = input("Ask a question about the image: ")
+    while True:
 
-    answer = ask_image_question(image_path, question)
+        question = input("\nAsk a question about the image (or type 'exit'): ")
 
-    print("\nAnswer:\n", answer)
+        if question.lower() in ["exit", "quit", "q"]:
+            break
+
+        answer = ask_image_question(image_path, question)
+
+        print("\nAnswer:\n", answer)
 
     exit()
 
