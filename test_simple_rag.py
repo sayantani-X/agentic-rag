@@ -1,14 +1,35 @@
 from pipeline.rag_pipeline import RAGPipeline
 from tools.image_qa import ask_image_question
 from tools.image_generation import generate_image
+from tools.wikipedia_qa import ask_wikipedia
 
 
 print("Choose mode:")
 print("1. Ask questions from context (RAG)")
 print("2. Ask questions about an image (VQA)")
 print("3. Generate an image")
+print("4. Ask questions using Wikipedia")
 
-mode = input("Enter choice (1/2/3): ")
+mode = input("Enter choice (1/2/3/4): ")
+
+# -------------------------
+# WIKIPEDIA QUESTION ANSWERING
+# -------------------------
+
+if mode == "4":
+
+    while True:
+
+        question = input("\nAsk a Wikipedia question (or type 'exit'): ")
+
+        if question.lower() in ["exit", "quit", "q"]:
+            break
+
+        answer = ask_wikipedia(question)
+
+        print("\nAnswer:\n", answer)
+
+    exit()
 
 
 # -------------------------
@@ -71,3 +92,4 @@ while True:
     result = pipeline.ask(query)
 
     print("\nAnswer:\n", result["answer"])
+
