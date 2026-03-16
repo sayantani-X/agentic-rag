@@ -1,9 +1,13 @@
 import base64
 import time
 from config import client, VISION_MODEL
+import os
 
 
 def ask_image_question(image_path, question):
+
+    if not os.path.exists(image_path):
+        return "Image file not found."
 
     # read image
     with open(image_path, "rb") as f:

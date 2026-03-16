@@ -6,23 +6,31 @@ SAVE_DIR = "data/generated_images"
 
 def generate_image(prompt):
 
-    os.makedirs(SAVE_DIR, exist_ok=True)
+    try:
 
-    print("\nGenerating image with Imagen...")
+        os.makedirs(SAVE_DIR, exist_ok=True)
 
-    response = gemini_client.models.generate_images(
-        model=IMAGE_MODEL,
-        prompt=prompt
-    )
+        print("\nGenerating image with Imagen...")
 
-    # Imagen returns a PIL image object
-    image = response.generated_images[0].image
+        response = gemini_client.models.generate_images(
+            model=IMAGE_MODEL,
+            prompt=prompt
+        )
 
-    filename = f"generated_{abs(hash(prompt))}.png"
-    filepath = os.path.join(SAVE_DIR, filename)
+        # Imagen returns a PIL image object
+        image = response.generated_images[0].image
 
-    image.save(filepath)
+        filename = f"generated_{abs(hash(prompt))}.png"
+        filepath = os.path.join(SAVE_DIR, filename)
 
-    print("\nImage saved at:", filepath)
+        image.save(filepath)
 
-    return filepath
+        print("\nImage saved at:", filepath)
+
+        return filepath
+    
+    except Exception as e:
+
+        print("Image generation failed:", e)
+
+        return None

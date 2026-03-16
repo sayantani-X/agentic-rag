@@ -3,6 +3,8 @@ from tools.image_qa import ask_image_question
 from tools.image_generation import generate_image
 from tools.wikipedia_qa import ask_wikipedia
 
+import warnings
+warnings.filterwarnings("ignore")
 
 print("Choose mode:")
 print("1. Ask questions from context (RAG)")
