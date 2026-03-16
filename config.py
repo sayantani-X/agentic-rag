@@ -10,7 +10,7 @@ gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 EMBED_MODEL = "openai/text-embedding-3-small"
 LLM_MODEL = "meta-llama/llama-3.1-8b-instruct"
-VISION_MODEL = "google/gemma-3-4b-it:free"
+VISION_MODEL = "gemini-3-flash-preview"
 # IMAGE_MODEL = "google/gemma-3-4b-it:free"
 IMAGE_MODEL = "imagen-4.0-generate-001"
 

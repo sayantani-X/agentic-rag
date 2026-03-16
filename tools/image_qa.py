@@ -1,19 +1,12 @@
-import base64
 import time
-from config import client, VISION_MODEL
 import os
+from config import gemini_client, VISION_MODEL
 
 
 def ask_image_question(image_path, question):
 
     if not os.path.exists(image_path):
         return "Image file not found."
-
-    # read image
-    with open(image_path, "rb") as f:
-        image_bytes = f.read()
-
-    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
     retries = 3
     delay = 2
@@ -22,32 +15,35 @@ def ask_image_question(image_path, question):
 
         try:
 
-            response = client.chat.completions.create(
+            with open(image_path, "rb") as f:
+                image_bytes = f.read()
+
+            response = gemini_client.models.generate_content(
                 model=VISION_MODEL,
-                messages=[
+                contents=[
                     {
                         "role": "user",
-                        "content": [
-                            {"type": "text", "text": question},
+                        "parts": [
+                            {"text": question},
                             {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{image_base64}"
+                                "inline_data": {
+                                    "mime_type": "image/jpeg",
+                                    "data": image_bytes
                                 }
                             }
                         ]
                     }
-                ],
-                max_tokens=300
+                ]
             )
 
-            return response.choices[0].message.content
+            return response.text
 
         except Exception as e:
 
             if attempt == retries - 1:
-                raise e
+                return f"Image QA failed: {str(e)}"
 
             print(f"Retry {attempt + 1}/{retries} after error: {e}")
+
             time.sleep(delay)
             delay *= 2
