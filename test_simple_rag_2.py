@@ -3,9 +3,7 @@ from tools.image_generation import generate_image
 from tools.image_qa import ask_image_question
 from tools.wikipedia_qa import ask_wikipedia
 from agents.router_agent import route_query
-
-import warnings
-warnings.filterwarnings("ignore")
+from tools.query_expander import expand_with_intent, expand_query
 
 
 pipeline = RAGPipeline("data/documents")
@@ -20,92 +18,94 @@ while True:
     if query.lower() in ["exit", "quit", "q"]:
         break
 
+    # -----------------------
+    # FIRST ROUTER PASS
+    # -----------------------
+
     routing = route_query(query)
 
     task = routing.get("task", "AMBIGUOUS")
-    reason = routing.get("reason", "")
 
-    print("\nRouting decision:", task)
-    print("Reason:", reason)
+    print("\nRouter decision:", task)
 
-    # ---------------------
-    # AMBIGUOUS QUERY
-    # ---------------------
+    # -----------------------
+    # INTENT EXPANSION
+    # -----------------------
 
     if task == "AMBIGUOUS":
 
-        print("\nI cannot determine which tool to use.")
+        print("Router uncertain → expanding intent")
 
-        print("""
-Choose a mode (1/2/3/4):
+        intent_queries = expand_with_intent(query)
 
+        routing = route_query(intent_queries)
+
+        task = routing.get("task", "AMBIGUOUS")
+
+        print("Router after intent expansion:", task)
+
+        if task == "AMBIGUOUS":
+
+            print("\nI still cannot determine the correct mode.")
+
+            print("""
 1. Wikipedia search
 2. Context QA
 3. Image generation
-4. Image question answering
+4. Image QA
 """)
 
-        choice = input("Enter choice: ")
+            choice = input("Choose mode (1/2/3/4): ")
 
-        if choice == "1":
-            task = "WIKIPEDIA_SEARCH"
+            if choice == "1":
+                task = "WIKIPEDIA_SEARCH"
+            elif choice == "2":
+                task = "CONTEXT_QA"
+            elif choice == "3":
+                task = "IMAGE_GENERATION"
+            elif choice == "4":
+                task = "IMAGE_QA"
+            else:
+                print("Invalid choice")
+                continue
 
-        elif choice == "2":
-            task = "CONTEXT_QA"
+    # -----------------------
+    # NORMAL QUERY EXPANSION
+    # -----------------------
 
-        elif choice == "3":
-            task = "IMAGE_GENERATION"
+    if task != "IMAGE_GENERATION":
 
-        elif choice == "4":
-            task = "IMAGE_QA"
+        queries = expand_query(query)
 
-        else:
-            print("Invalid choice.")
-            continue
+    else:
 
-    # ---------------------
-    # WIKIPEDIA SEARCH
-    # ---------------------
+        queries = [query]
+
+    # -----------------------
+    # EXECUTE TASK
+    # -----------------------
 
     if task == "WIKIPEDIA_SEARCH":
 
         print("\nMode: WIKIPEDIA SEARCH")
 
-        answer = ask_wikipedia(query)
+        answer = ask_wikipedia(queries[0])
 
         print("\nAnswer:\n", answer)
-
-    # ---------------------
-    # CONTEXT QA
-    # ---------------------
 
     elif task == "CONTEXT_QA":
 
-        print("\nMode: CONTEXT QA (Strict Context Mode)")
+        print("\nMode: CONTEXT QA")
 
-        result = pipeline.ask(query)
+        contexts = []
 
-        answer = result["answer"]
+        for q in queries:
 
-        if "not present in the context" in answer.lower():
+            result = pipeline.ask(q)
 
-            print("\nAnswer not found in provided context.")
+            contexts.append(result["answer"])
 
-            choice = input(
-                "Would you like to search Wikipedia instead? (y/n): "
-            )
-
-            if choice.lower() == "y":
-
-                print("\nSwitching to WIKIPEDIA SEARCH")
-
-                answer = ask_wikipedia(query)
-
-        print("\nAnswer:\n", answer)
-
-    # ---------------------
-    # IMAGE GENERATION
-    # ---------------------
+        print("\nAnswer:\n", contexts[0])
 
     elif task == "IMAGE_GENERATION":
 
@@ -113,21 +113,13 @@ Choose a mode (1/2/3/4):
 
         path = generate_image(query)
 
-        if path:
-            print("\nImage generated at:", path)
-        else:
-            print("Image generation failed.")
-
-    # ---------------------
-    # IMAGE QA
-    # ---------------------
+        print("Image saved at:", path)
 
     elif task == "IMAGE_QA":
 
         print("\nMode: IMAGE QUESTION ANSWERING")
 
         if not image_path:
-
             image_path = input("Enter image path: ")
 
         answer = ask_image_question(image_path, query)
