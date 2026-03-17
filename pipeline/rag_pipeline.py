@@ -11,22 +11,44 @@ class RAGPipeline:
 
     def __init__(self, data_path=None, youtube_url=None):
 
+        # store inputs but DO NOT process yet
+        self.data_path = data_path
+        self.youtube_url = youtube_url
+
+        self.vector_store = None
+        self.initialized = False
+
+    # -------------------------
+    # LAZY INITIALIZATION
+    # -------------------------
+
+    def initialize(self):
+
+        if self.initialized:
+            return
+
         documents = []
 
-        if data_path:
-            docs = load_documents(data_path)
+        if self.data_path:
+            docs = load_documents(self.data_path)
             print(f"Loaded {len(docs)} documents")
             documents.extend(docs)
 
-        if youtube_url:
-            yt_docs = load_youtube(youtube_url)
+        if self.youtube_url:
+            yt_docs = load_youtube(self.youtube_url)
             print("Loaded YouTube transcript")
             documents.extend(yt_docs)
 
+        if not documents:
+            print("No documents found.")
+            return
+
+        # preserve your original logic
         if documents and documents[0]["doc_id"].startswith("youtube:"):
             chunks = documents
         else:
             chunks = chunk_documents(documents)
+
         print(f"Documents chunked into {len(chunks)} chunks")
 
         self.vector_store = VectorStore()
@@ -34,7 +56,18 @@ class RAGPipeline:
 
         print(f"Index built with {len(chunks)} chunks")
 
+        self.initialized = True
+
+    # -------------------------
+    # ASK FUNCTION
+    # -------------------------
+
     def ask(self, query):
+
+        # 🔥 ensure initialization before use
+        if not self.initialized:
+            print("\n[INFO] Initializing RAG pipeline...")
+            self.initialize()
 
         contexts = retrieve(query, self.vector_store)
 

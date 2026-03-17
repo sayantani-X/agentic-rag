@@ -1,4 +1,5 @@
 import json
+import re
 from config import client, LLM_MODEL
 
 
@@ -26,6 +27,10 @@ Generate an image from a prompt. Use when the user asks to create, generate, dra
 IMAGE_QA
 Answer questions about an uploaded image. Use when the user asks about the content of an image.
 
+DETERMINISTIC
+Use when the query requires exact computation such as, arithmetic, unit conversions, dates, logic
+If the answer must be exact and computable, ALWAYS choose DETERMINISTIC.
+
 Rules:
 
 1. Choose exactly ONE task.
@@ -35,6 +40,7 @@ Rules:
 5. If the user asks about an uploaded image → IMAGE_QA.
 6. If the user refers to provided/uploaded documents, video, or context → CONTEXT_QA.
 7. If the question requires general factual knowledge or explicitly mentions wikipedia or web or internet search → WIKIPEDIA_SEARCH.
+8. If the question requires exact computation or logic → DETERMINISTIC.
 
 Return JSON:
 
@@ -42,14 +48,41 @@ Return JSON:
  "task": "...",
  "reason": "..."
 }
+
+Return ONLY valid JSON. Do not include any explanation or text outside JSON.
 """
 
+def parse_json_safe(text):
+
+    try:
+        return json.loads(text)
+
+    except Exception:
+
+        # try extracting JSON block
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+
+        if match:
+            try:
+                return json.loads(match.group())
+            except:
+                pass
+
+    return {
+        "task": "AMBIGUOUS",
+        "reason": "Router parse failure"
+    }
 
 def route_query(queries):
 
+    # ensure list
     if isinstance(queries, str):
         queries = [queries]
 
+
+    # -------------------------
+    # BUILD ROUTER INPUT
+    # -------------------------
     query_block = "\n".join(queries)
 
     prompt = f"""
@@ -72,11 +105,13 @@ Decide which tool should answer the request.
 
         text = response.choices[0].message.content
 
-        try:
-            return json.loads(text)
-        except Exception:
-            return {"task": "AMBIGUOUS", "reason": "Router parse failure"}
+        result = parse_json_safe(text)
+
+        return result
 
     except Exception as e:
 
-        return {"task": "AMBIGUOUS", "reason": str(e)}
+        return {
+            "task": "AMBIGUOUS",
+            "reason": f"Router failed: {str(e)}"
+        }

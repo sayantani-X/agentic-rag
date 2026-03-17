@@ -4,6 +4,10 @@ from tools.image_qa import ask_image_question
 from tools.wikipedia_qa import ask_wikipedia
 from agents.router_agent import route_query
 from tools.query_expander import expand_with_intent, expand_query
+from tools.deterministic_qa import ask_deterministic
+
+from document_processing.retrieval.retriever import retrieve
+from agents.answer_agent import generate_answer
 
 
 pipeline = RAGPipeline("data/documents")
@@ -25,16 +29,18 @@ while True:
     routing = route_query(query)
 
     task = routing.get("task", "AMBIGUOUS")
+    # reason = routing.get("reason", "")
 
     print("\nRouter decision:", task)
+    # print("Reason:", reason)
 
     # -----------------------
-    # INTENT EXPANSION
+    # INTENT EXPANSION (ONLY IF AMBIGUOUS)
     # -----------------------
 
     if task == "AMBIGUOUS":
 
-        print("Router uncertain → expanding intent")
+        print("\nRouter uncertain → expanding intent")
 
         intent_queries = expand_with_intent(query)
 
@@ -55,7 +61,7 @@ while True:
 4. Image QA
 """)
 
-            choice = input("Choose mode (1/2/3/4): ")
+            choice = input("Choose mode: ")
 
             if choice == "1":
                 task = "WIKIPEDIA_SEARCH"
@@ -74,17 +80,15 @@ while True:
     # -----------------------
 
     if task != "IMAGE_GENERATION":
-
         queries = expand_query(query)
-
     else:
-
         queries = [query]
 
     # -----------------------
     # EXECUTE TASK
     # -----------------------
 
+    # ✅ WIKIPEDIA
     if task == "WIKIPEDIA_SEARCH":
 
         print("\nMode: WIKIPEDIA SEARCH")
@@ -93,28 +97,59 @@ while True:
 
         print("\nAnswer:\n", answer)
 
+    # ✅ CONTEXT QA (FIXED VERSION)
     elif task == "CONTEXT_QA":
 
         print("\nMode: CONTEXT QA")
 
-        contexts = []
+        # 🔥 ENSURE INITIALIZATION BEFORE RETRIEVAL
+        if not pipeline.initialized:
+
+            choice = input(
+                "Use the provided documents? (y/n): "
+            )
+
+            if choice.lower() != "y":
+                print("Context usage skipped.")
+                continue
+
+            pipeline.initialize()
+
+            # safety check
+            if pipeline.vector_store is None:
+                print("Failed to initialize vector store.")
+                continue
+
+        all_contexts = []
 
         for q in queries:
+            contexts = retrieve(q, pipeline.vector_store)
+            all_contexts.extend(contexts)
 
-            result = pipeline.ask(q)
+        # remove duplicates
+        unique_contexts = {
+            c["chunk_id"]: c for c in all_contexts
+        }.values()
 
-            contexts.append(result["answer"])
+        result = generate_answer(query, list(unique_contexts))
 
-        print("\nAnswer:\n", contexts[0])
+        answer = result["answer"]
 
+        print("\nAnswer:\n", answer)
+
+    # ✅ IMAGE GENERATION
     elif task == "IMAGE_GENERATION":
 
         print("\nMode: IMAGE GENERATION")
 
         path = generate_image(query)
 
-        print("Image saved at:", path)
+        if path:
+            print("\nImage saved at:", path)
+        else:
+            print("Image generation failed.")
 
+    # ✅ IMAGE QA
     elif task == "IMAGE_QA":
 
         print("\nMode: IMAGE QUESTION ANSWERING")
@@ -123,5 +158,17 @@ while True:
             image_path = input("Enter image path: ")
 
         answer = ask_image_question(image_path, query)
+
+        print("\nAnswer:\n", answer)
+
+    # -----------------------
+    # DETERMINISTIC
+    # -----------------------
+
+    elif task == "DETERMINISTIC":
+
+        print("\nMode: DETERMINISTIC")
+
+        answer = ask_deterministic(query)
 
         print("\nAnswer:\n", answer)
