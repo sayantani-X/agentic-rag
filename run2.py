@@ -2,111 +2,174 @@ from pipeline.rag_pipeline import RAGPipeline
 from tools.image_generation import generate_image
 from tools.image_qa import ask_image_question
 from tools.wikipedia_qa import ask_wikipedia
+from tools.deterministic_qa import ask_deterministic
+from tools.general_qa import ask_general
 from agents.router_agent import route_query
 from tools.query_expander import expand_with_intent, expand_query
-from tools.deterministic_qa import ask_deterministic
 
 from document_processing.retrieval.retriever import retrieve
 from agents.answer_agent import generate_answer
+from config import client, LLM_MODEL
+
+from utils.memory_manager import MemoryManager
 
 
 pipeline = RAGPipeline("data/documents")
+memory = MemoryManager()
 
 image_path = None
 
+# -------------------------
+# QUERY REWRITE USING MEMORY
+# -------------------------
+
+def rewrite_with_memory(query, memory):
+
+    history = memory.get_history_text()
+
+    if not history:
+        return query
+
+    prompt = f"""
+Rewrite the query ONLY if it depends on previous context.
+
+If the query is independent, return it unchanged.
+
+Conversation:
+{history}
+
+Query:
+{query}
+
+Rewritten query:
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        return response.choices[0].message.content.strip()
+
+    except:
+        return query
+
+
+# -------------------------
+# MAIN LOOP
+# -------------------------
 
 while True:
 
     query = input("\nUser: ")
 
     if query.lower() in ["exit", "quit", "q"]:
+        print("\nSession ended. Memory cleared.\n")
         break
 
-    # -----------------------
-    # FIRST ROUTER PASS
-    # -----------------------
+    # -------------------------
+    # RESET MEMORY
+    # -------------------------
 
-    routing = route_query(query)
+    if query.lower() in ["reset", "clear memory"]:
+        memory.reset()
+        continue
+
+    # -------------------------
+    # FIXED QUERY HANDLING
+    # -------------------------
+
+    original_query = query
+
+    # avoid rewriting long independent queries
+    if len(query.split()) < 10:
+        rewritten_query = rewrite_with_memory(query, memory)
+    else:
+        rewritten_query = query
+
+    # 🔥 router uses rewritten query ONLY
+    routing = route_query(rewritten_query)
 
     task = routing.get("task", "AMBIGUOUS")
-    # reason = routing.get("reason", "")
+    reason = routing.get("reason", "")
 
     print("\nRouter decision:", task)
-    # print("Reason:", reason)
+    print("Reason:", reason)
 
-    # -----------------------
-    # INTENT EXPANSION (ONLY IF AMBIGUOUS)
-    # -----------------------
+
+    # -------------------------
+    # INTENT EXPANSION
+    # -------------------------
 
     if task == "AMBIGUOUS":
 
         print("\nRouter uncertain → expanding intent")
 
-        intent_queries = expand_with_intent(query)
+        intent_queries = expand_with_intent(rewritten_query)
 
         routing = route_query(intent_queries)
-
         task = routing.get("task", "AMBIGUOUS")
 
         print("Router after intent expansion:", task)
 
         if task == "AMBIGUOUS":
 
-            print("\nI still cannot determine the correct mode.")
-
             print("""
 1. Wikipedia search
 2. Context QA
 3. Image generation
 4. Image QA
+5. Deterministic
 """)
 
             choice = input("Choose mode: ")
 
-            if choice == "1":
-                task = "WIKIPEDIA_SEARCH"
-            elif choice == "2":
-                task = "CONTEXT_QA"
-            elif choice == "3":
-                task = "IMAGE_GENERATION"
-            elif choice == "4":
-                task = "IMAGE_QA"
-            else:
-                print("Invalid choice")
-                continue
+            mapping = {
+                "1": "WIKIPEDIA_SEARCH",
+                "2": "CONTEXT_QA",
+                "3": "IMAGE_GENERATION",
+                "4": "IMAGE_QA",
+                "5": "DETERMINISTIC"
+            }
 
-    # -----------------------
-    # NORMAL QUERY EXPANSION
-    # -----------------------
+            task = mapping.get(choice, "AMBIGUOUS")
 
-    if task != "IMAGE_GENERATION":
-        queries = expand_query(query)
+    # -------------------------
+    # QUERY EXPANSION
+    # -------------------------
+
+    if task == "CONTEXT_QA" or task == "WIKIPEDIA_SEARCH":
+        queries = expand_query(rewritten_query)
     else:
-        queries = [query]
+        queries = [rewritten_query]
 
-    # -----------------------
-    # EXECUTE TASK
-    # -----------------------
+    # -------------------------
+    # EXECUTION
+    # -------------------------
 
-    # ✅ WIKIPEDIA
-    if task == "WIKIPEDIA_SEARCH":
+    if task == "DETERMINISTIC":
+
+        print("\nMode: DETERMINISTIC")
+
+        answer = ask_deterministic(original_query)
+
+    elif task == "WIKIPEDIA_SEARCH":
 
         print("\nMode: WIKIPEDIA SEARCH")
 
-        answer = ask_wikipedia(queries[0])
+        answer = ask_wikipedia(original_query)
 
-        print("\nAnswer:\n", answer)
+        memory.set_resource("wikipedia")
 
-    # ✅ CONTEXT QA (FIXED VERSION)
     elif task == "CONTEXT_QA":
 
         print("\nMode: CONTEXT QA")
 
-        # 🔥 ENSURE INITIALIZATION BEFORE RETRIEVAL
         if not pipeline.initialized:
 
             choice = input(
-                "Use the provided documents? (y/n): "
+                "Do you want to load and use the provided documents? (y/n): "
             )
 
             if choice.lower() != "y":
@@ -115,7 +178,6 @@ while True:
 
             pipeline.initialize()
 
-            # safety check
             if pipeline.vector_store is None:
                 print("Failed to initialize vector store.")
                 continue
@@ -126,30 +188,28 @@ while True:
             contexts = retrieve(q, pipeline.vector_store)
             all_contexts.extend(contexts)
 
-        # remove duplicates
         unique_contexts = {
             c["chunk_id"]: c for c in all_contexts
         }.values()
 
-        result = generate_answer(query, list(unique_contexts))
-
+        result = generate_answer(original_query, list(unique_contexts))
         answer = result["answer"]
 
-        print("\nAnswer:\n", answer)
+        memory.set_resource("documents")
 
-    # ✅ IMAGE GENERATION
     elif task == "IMAGE_GENERATION":
 
         print("\nMode: IMAGE GENERATION")
 
-        path = generate_image(query)
+        path = generate_image(original_query)
 
         if path:
             print("\nImage saved at:", path)
         else:
             print("Image generation failed.")
 
-    # ✅ IMAGE QA
+        continue
+
     elif task == "IMAGE_QA":
 
         print("\nMode: IMAGE QUESTION ANSWERING")
@@ -157,18 +217,31 @@ while True:
         if not image_path:
             image_path = input("Enter image path: ")
 
-        answer = ask_image_question(image_path, query)
+        answer = ask_image_question(image_path, original_query)
 
-        print("\nAnswer:\n", answer)
+        memory.set_resource(image_path)
 
-    # -----------------------
-    # DETERMINISTIC
-    # -----------------------
+    elif task == "GENERAL":
 
-    elif task == "DETERMINISTIC":
+        print("\nMode: GENERAL")
 
-        print("\nMode: DETERMINISTIC")
+        answer = ask_general(original_query, memory)
 
-        answer = ask_deterministic(query)
+    else:
+        print("Could not determine task.")
+        continue
 
-        print("\nAnswer:\n", answer)
+    # -------------------------
+    # STORE MEMORY
+    # -------------------------
+
+    memory.set_mode(task)
+    memory.add(original_query, answer)
+
+    # -------------------------
+    # OUTPUT
+    # -------------------------
+
+    print("\nAnswer:\n", answer)
+
+    

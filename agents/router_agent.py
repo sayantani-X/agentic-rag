@@ -20,9 +20,24 @@ Answer ONLY using provided context such as:
 documents, typed text, YouTube transcripts, uploaded images,
 image links, document links, or other user-provided material.
 Use when the user refers to documents, uploaded files, videos, links, or provided context.
+Conversation memory is NOT considered "context".
+
+Only choose CONTEXT_QA if the user explicitly refers to:
+- uploaded documents
+- files
+- PDFs
+- YouTube videos
+- provided content
+
+DO NOT choose CONTEXT_QA for:
+- follow-up questions
+- references like "it", "her", "that"
+- conversational continuity
 
 IMAGE_GENERATION
 Generate an image from a prompt. Use when the user asks to create, generate, draw, design, render, or make an image.
+IMAGE_GENERATION is ONLY for visual content.
+Do NOT use it for text generation.
 
 IMAGE_QA
 Answer questions about an uploaded image. Use when the user asks about the content of an image.
@@ -30,13 +45,26 @@ Answer questions about an uploaded image. Use when the user asks about the conte
 DETERMINISTIC
 Use when the query requires exact computation such as, arithmetic, unit conversions, dates, logic
 If the answer must be exact and computable, ALWAYS choose DETERMINISTIC.
+Do NOT use for instructions, commands, general text generation
+
+GENERAL
+Use when the user asks for:
+- storytelling
+- creative writing
+- open-ended responses
+- instructions not tied to tools
+
+Examples:
+"tell me a story"
+"write a poem"
+"how are you doing?"
 
 Rules:
 
 1. Choose exactly ONE task.
 2. Never combine tasks.
 3. If the request is unclear, return AMBIGUOUS.
-4. If the user asks to create/generate/paint/draw/make an image → IMAGE_GENERATION.
+4. If the user asks to create/generate/paint/draw/make an image → IMAGE_GENERATION. Question should include "image" or "photo" or "draw" or "paint" or a similar term.
 5. If the user asks about an uploaded image → IMAGE_QA.
 6. If the user refers to provided/uploaded documents, video, or context → CONTEXT_QA.
 7. If the question requires general factual knowledge or explicitly mentions wikipedia or web or internet search → WIKIPEDIA_SEARCH.
